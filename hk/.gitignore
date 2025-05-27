@@ -1,0 +1,14 @@
+# Ignore bundler config
+.bundle/
+
+# Ignore local gem installs
+vendor/bundle/
+
+# Ignore other common Ruby/gem stuff if necessary
+# .gem/
+# *.gem
+# Gemfile.lock (if not shared across team, though often it is)
+
+# OS-specific
+.DS_Store
+*.swp
