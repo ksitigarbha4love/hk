@@ -17,6 +17,9 @@ Gem::Specification.new do |spec|
   # Add dependencies as needed, e.g.:
   spec.add_dependency "thor", "~> 1.0"
   spec.add_dependency "tty-color" # For colorized CLI output
+  spec.add_dependency "httparty", "~> 0.20" # For HTTP requests
+  spec.add_dependency "nokogiri", "~> 1.15" # For HTML parsing
   spec.add_development_dependency "bundler" # Using a common version constraint
   spec.add_development_dependency "rspec", "~> 3.0"
+  spec.add_development_dependency "webmock", "~> 3.0" # For mocking HTTP requests in tests
 end

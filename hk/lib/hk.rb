@@ -35,6 +35,8 @@ module HK
   require_relative 'hk/net/scanner'
   # HK::Web::Client for HTTP operations
   require_relative 'hk/web/client'
+  # HK::Web::Crawler for crawling websites
+  require_relative 'hk/web/crawler'
 
   def self.scan(target)
     scanner = HK::Scanner.new(target) # Explicitly HK::Scanner to avoid ambiguity
