@@ -1,67 +1,21 @@
 #!/usr/bin/env ruby
 
-# Ensure we can load the library relative to this script.
-# This is the most reliable way for a script in bin/ to load from lib/.
 begin
   # If run via `bundle exec hk ...`, bundler/setup will handle load paths
-  # for gems, including 'hk' itself if it's properly specified in Gemfile (e.g. via gemspec).
+  # for gems (like Thor) and for 'hk' itself (if Gemfile->gemspec is correct).
   require 'bundler/setup'
-  require 'hk' # Bundler should find 'hk' if Gemfile -> gemspec is correct
-rescue LoadError => e
-  # Fallback if 'bundler/setup' fails or 'hk' is not found by bundler.
-  # This might happen if not using `bundle exec` or if the gem isn't installed yet.
-  # Try loading directly using a path relative to this script file.
-  # puts "Bundler setup failed or 'hk' not found via Bundler: #{e.message}. Falling back to require_relative." # Debug
-  begin
-    require_relative '../lib/hk'
-  rescue LoadError => e2
-    # If this also fails, then there's a more fundamental issue.
-    abort "Failed to load HK library. Ensure you are in the project root or have bundled correctly.\nError: #{e2.message}"
-  end
+rescue LoadError
+  # Fallback if 'bundler/setup' fails.
+  # This adds hk/lib to the load path so `require 'hk'` and `require 'hk/cli'` work.
+  # __FILE__ is .../hk/bin/hk. So, '../lib' is .../hk/lib.
+  lib_path = File.expand_path('../lib', __FILE__)
+  $:.unshift(lib_path) unless $:.include?(lib_path)
 end
 
-if ARGV.include?('--help') || ARGV.include?('-h')
-  puts <<~HELP
-    Hēi Kè (HK) Security Framework - Version #{HK::VERSION}
+# Require the main hk library to define HK module, HK::VERSION etc.
+require 'hk'
+# Require the CLI definitions
+require 'hk/cli' # This will be found in hk/lib/hk/cli.rb
 
-    Usage: hk [command] [options]
-
-    This is a very basic help message. More commands will be added soon.
-
-    Available commands (planned):
-      scan          Scan targets
-      ports         Port scan targets
-      http          HTTP probing
-      crawl         Crawl web targets
-      templates     Manage templates
-      interactive   Enter interactive mode
-
-    Options:
-      -h, --help    Show this help message
-  HELP
-elsif ARGV.empty?
-  puts "Welcome to HK! Use --help for options."
-else
-  # Basic command handling (to be replaced by Thor)
-  command = ARGV.shift
-  case command
-  when 'scan'
-    target = ARGV.shift
-    if target
-      HK.scan(target)
-    else
-      puts "Error: 'scan' command requires a target."
-      puts "Usage: hk scan <target>"
-    end
-  when 'crawl'
-    target = ARGV.shift
-    if target
-      HK.crawl(target)
-    else
-      puts "Error: 'crawl' command requires a target."
-      puts "Usage: hk crawl <target>"
-    end
-  else
-    puts "Unknown command: #{command}. Use --help for available commands."
-  end
-end
+# Start the Thor CLI
+HK::CLI.start(ARGV)

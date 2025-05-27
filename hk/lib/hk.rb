@@ -31,20 +31,10 @@ module HK
     end
   end
 
-  module Net
-    class Scanner
-      def initialize
-        puts "HK::Net::Scanner initialized."
-      end
-
-      def tcp_scan(target, ports_array)
-        ports_str = ports_array.join(', ')
-        puts "HK::Net::Scanner: TCP scanning #{target} on ports: [#{ports_str}]"
-        # Placeholder return
-        { target: target, open_ports: [] }
-      end
-    end
-  end
+  # HK::Net::Scanner is now in its own file
+  require_relative 'hk/net/scanner'
+  # HK::Web::Client for HTTP operations
+  require_relative 'hk/web/client'
 
   def self.scan(target)
     scanner = HK::Scanner.new(target) # Explicitly HK::Scanner to avoid ambiguity

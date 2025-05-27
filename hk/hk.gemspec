@@ -15,7 +15,8 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Add dependencies as needed, e.g.:
-  # spec.add_dependency "thor"
+  spec.add_dependency "thor", "~> 1.0"
+  spec.add_dependency "tty-color" # For colorized CLI output
   spec.add_development_dependency "bundler" # Using a common version constraint
   spec.add_development_dependency "rspec", "~> 3.0"
 end
