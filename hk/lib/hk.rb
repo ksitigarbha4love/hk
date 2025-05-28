@@ -37,6 +37,12 @@ module HK
   require_relative 'hk/web/client'
   # HK::Web::Crawler for crawling websites
   require_relative 'hk/web/crawler'
+  # HK::TemplateEngine for loading and running templates
+  require_relative 'hk/template_engine'
+  # HK::CoreDSL for Ruby native templates (HK.template method)
+  require_relative 'hk/core_dsl'
+  # HK::Http::ClientWrapper for use in Ruby DSL templates
+  require_relative 'hk/http/client_wrapper'
 
   def self.scan(target)
     scanner = HK::Scanner.new(target) # Explicitly HK::Scanner to avoid ambiguity

@@ -12,6 +12,22 @@ module HK
       def pastel
         @pastel ||= TTY::Color
       end
+
+      # Helper methods for scan command output (from current task)
+      def sev_sort_order(severity_string)
+          %w[critical high medium low info unknown].index(severity_string&.downcase) || 99
+      end
+
+      def severity_color(severity_string)
+          case severity_string&.downcase
+          when 'critical' then pastel.bright_red.bold(severity_string)
+          when 'high'     then pastel.red(severity_string)
+          when 'medium'   then pastel.yellow(severity_string)
+          when 'low'      then pastel.blue(severity_string)
+          when 'info'     then pastel.cyan(severity_string)
+          else pastel.white(severity_string || 'unknown')
+          end
+      end
     end
 
     desc "version", "Prints the HK version"
@@ -20,16 +36,125 @@ module HK
       puts "Hēi Kè (HK) Security Framework version #{hk_version_colored}"
     end
 
-    desc "scan TARGET", "Scans a target. Supports simple direct scan for now."
+    # scan command as per current task description
+    desc "scan TARGET", "Scans a target using specified templates."
     long_desc <<-LONGDESC
-      Performs a scan against the specified TARGET.
-      This initial version calls the foundational HK.scan method.
+      Performs a template-based scan against the specified TARGET.
+      You must provide a path to a template file or a directory containing templates
+      using the -t/--templates option.
+
+      YAML templates define requests and matchers.
+      Ruby DSL templates allow for more complex scripted logic.
+
+      Example:
+        hk scan example.com -t templates/my_sqli_check.yml
+        hk scan example.com -t templates/web_vulns/
+        hk scan example.com -t templates/complex_attack.rb --timeout 15
     LONGDESC
+    option :templates, aliases: "-t", type: :string, required: true, banner: "PATH", desc: "Path to a template file or a directory of templates"
+    option :timeout, type: :numeric, desc: "Global timeout for HTTP requests within templates (seconds)"
+    # Future options: --severity, --output, etc.
+
     def scan(target)
-      puts pastel.cyan("CLI:") + " Received scan command for target: " + pastel.bold(pastel.yellow(target))
-      HK.scan(target)
+      # Thor handles 'required: true' for options, so this check is usually not needed.
+      # However, keeping it for explicit error message if Thor's behavior changes or for clarity.
+      unless options[:templates] 
+        puts pastel.red("Error: Missing required option --templates / -t")
+        invoke :help, ['scan'] 
+        return
+      end
+
+      target_url = HK::Web::Crawler.normalize_url(target) # Use the same normalizer
+      unless target_url
+          puts pastel.red("Error: Invalid target URL provided: #{target}")
+          return
+      end
+      
+      puts pastel.cyan("CLI:") + " Scan command for target: " + pastel.yellow.bold(target_url)
+      puts pastel.dim("  Templates path: #{options[:templates]}")
+      puts pastel.dim("  Global timeout option: #{options[:timeout] || 'default (engine uses 5s in Web::Client)'}") 
+      puts "--------------------------------------------------"
+
+      engine_options = { timeout: options[:timeout] }.compact # Pass only non-nil options
+      template_engine = HK::TemplateEngine.new(engine_options)
+
+      # 1. Load Templates
+      puts pastel.magenta("Loading templates...")
+      # Clear Ruby DSL registry before loading to avoid stale data from previous runs in same process
+      # This is important if HK::TemplateRegistry is a global store and CLI is run multiple times
+      # in a persistent environment (like IRB or a test suite without proper cleanup).
+      # For a single CLI invocation, it's less critical but good practice.
+      HK::TemplateRegistry.clear! 
+      load_results = template_engine.load_from_path(options[:templates])
+
+      if load_results[:errors].any?
+        puts pastel.yellow("Encountered errors during template loading:")
+        load_results[:errors].each { |err| puts pastel.yellow("  - #{err}") }
+      end
+
+      loaded_templates = load_results[:loaded_templates]
+      if loaded_templates.empty?
+        puts pastel.red("No templates were successfully loaded. Aborting scan.")
+        return
+      end
+      puts pastel.green("Successfully loaded #{loaded_templates.size} template(s).")
+      puts "--------------------------------------------------"
+
+      # 2. Execute Templates
+      puts pastel.magenta("Executing templates against #{target_url}...")
+      all_findings = []
+      all_execution_errors = []
+
+      loaded_templates.each do |template_def|
+        # puts pastel.dim("  Executing template: #{template_def[:id]} (#{template_def[:type]})")
+        exec_result = template_engine.execute(template_def, target_url)
+        
+        all_findings.concat(exec_result[:findings]) if exec_result[:findings]&.any?
+        all_execution_errors.concat(exec_result[:errors]) if exec_result[:errors]&.any?
+      end
+      puts "--------------------------------------------------"
+
+      # 3. Display Results
+      if all_findings.any?
+        puts pastel.bright_green.bold("Vulnerability Findings (#{all_findings.size}):")
+        # Group by severity then sort by predefined order
+        all_findings.group_by { |f| f[:severity] }.sort_by { |sev, _| sev_sort_order(sev) }.each do |severity, findings_by_severity|
+            puts pastel.underline("
+  Severity: #{severity_color(severity&.to_s || 'unknown')}")
+            findings_by_severity.each_with_index do |finding, idx|
+                puts "    Finding ##{idx + 1}:"
+                puts "      Template Name: #{finding[:template_name]} (#{finding[:template_id]})"
+                puts "      Target:        #{finding[:target_url]}" 
+                puts "      Matched At:    #{finding[:matched_at_url]}" 
+                puts "      Description:   #{finding[:description]}"
+            end
+        end
+      else
+        puts pastel.green("No vulnerabilities found for the executed templates.")
+      end
+
+      if all_execution_errors.any?
+        puts pastel.red("
+Errors during template execution (#{all_execution_errors.size}):")
+        all_execution_errors.each_with_index do |err_info, idx| # Renamed err to err_info
+          # Check if err_info is a hash with expected keys, otherwise treat as string
+          if err_info.is_a?(Hash) && err_info[:error]
+            error_message = "Error ##{idx + 1}: "
+            # Include request_index and url if present (typically for YAML template errors)
+            error_message += "Request Index: #{err_info[:request_index]} - " if err_info[:request_index]
+            error_message += "#{err_info[:error]}"
+            error_message += " (URL: #{err_info[:url]})" if err_info[:url]
+            puts "    #{error_message}"
+          else # For simple string errors or other exception messages from Ruby DSL
+            puts "    Error ##{idx + 1}: #{err_info}"
+          end
+        end
+      end
+      puts "--------------------------------------------------"
+      puts pastel.cyan("Scan finished.")
     end
 
+    # --- Other commands like ports, http, crawl from previous subtasks ---
     desc "ports TARGET", "Scans ports on a target. Supports comma-separated ports and ranges (e.g., 80,443-445,8080)."
     option :ports, type: :string, aliases: "-p", banner: "PORTS", desc: "Comma-separated list of ports and ranges (e.g., 80,443-445,1000-1024)"
     option :top_ports, type: :numeric, banner: "N", desc: "Scan the top N most common ports (overrides -p if both given)"
@@ -51,7 +176,7 @@ module HK
           part.strip!
           if part.include?('-')
             start_port, end_port = part.split('-').map(&:to_i)
-            if start_port && end_port && start_port > 0 && end_port >= start_port && end_port <= 65535 && start_port <= 65535
+            if start_port && end_port && start_port > 0 && end_port >= start_port && end_port <= 65535 && start_port <=65535
               parsed_ports.concat((start_port..end_port).to_a)
             else
               puts pastel.yellow("Warning: Invalid port range '#{part}'. Skipping.")
@@ -164,7 +289,6 @@ module HK
     LONGDESC
     option :depth, type: :numeric, aliases: "-d", desc: "Crawl depth limit (default: 2)"
     option :threads, type: :numeric, aliases: "-t", desc: "Number of concurrent threads (placeholder, not yet implemented)"
-    # option :scope, type: :string, desc: "Define crawl scope (placeholder, current default is same host)"
     option :timeout, type: :numeric, desc: "HTTP request timeout in seconds for each page fetch (default: 5)"
     option :headers, type: :string, banner: "HEADER_STRING", desc: "Custom headers for HTTP requests (e.g., "Name1:Value1")"
 
@@ -172,13 +296,11 @@ module HK
       puts pastel.cyan("CLI:") + " Received crawl command for URL: " + pastel.yellow.bold(url)
       
       crawler_options = {
-        depth: options[:depth] || 2 # Default depth if not provided by Thor's default
+        depth: options[:depth] || 2 
       }
-      # Pass HTTP client related options if they are present
       crawler_options[:timeout] = options[:timeout] if options[:timeout]
       if options[:headers]
         begin
-          # Basic header parsing: "Key1:Value1;Key2:Value2"
           custom_headers = Hash[options[:headers].split(';').map { |h| h.split(':', 2).map(&:strip) }]
           crawler_options[:headers] = custom_headers
           puts pastel.dim("  Using custom headers for crawler requests: #{custom_headers.inspect}")
@@ -196,7 +318,6 @@ module HK
         return
       end
       
-      # Potentially long-running operation, maybe add a spinner later
       puts pastel.magenta("Starting crawl, this might take a while...")
       results = crawler.crawl
 
@@ -219,12 +340,20 @@ module HK
       if results[:errors].any?
         puts pastel.red("
   Errors during crawl (#{results[:errors].size}):")
-        results[:errors].each_with_index do |err_info, index|
-          puts "    #{index + 1}. URL: #{err_info[:url]}"
-          puts "       Error: #{err_info[:error]}"
+        all_execution_errors.each_with_index do |err_info, idx| # Corrected variable name from prompt
+          if err_info.is_a?(Hash) && err_info[:error]
+            error_message = "Error ##{idx + 1}: "
+            error_message += "Request Index: #{err_info[:request_index]} - " if err_info[:request_index]
+            error_message += "#{err_info[:error]}"
+            error_message += " (URL: #{err_info[:url]})" if err_info[:url]
+            puts "    #{error_message}"
+          else
+            puts "    Error ##{idx + 1}: #{err_info}"
+          end
         end
       end
       puts "--------------------------------------------------"
+      puts pastel.cyan("Scan finished.")
     end
   end
 end
