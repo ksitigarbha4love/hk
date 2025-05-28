@@ -1,5 +1,7 @@
 require 'yaml'
 require 'uri' # For URI.join
+# require 'hk/http/client_wrapper' # Should be loaded by hk.rb
+# require 'hk/core_dsl' # Should be loaded by hk.rb
 
 module HK
   class TemplateEngine
@@ -18,13 +20,9 @@ module HK
       @loaded_templates = {} 
     end
 
-    # Loads a single template file.
-    # Returns a data structure representing the parsed template, or nil on failure.
-    # Internal puts are commented out as errors will be collected by load_from_path.
     def load(template_path)
       unless File.exist?(template_path)
-        # puts @pastel.red("TemplateEngine Error: File not found - #{template_path}") 
-        return nil # Error handled by caller like load_from_path
+        return nil 
       end
       ext = File.extname(template_path).downcase
       
@@ -33,12 +31,10 @@ module HK
         begin
           yaml_data = YAML.safe_load_file(template_path, permitted_classes: [Symbol], aliases: true) 
         rescue Psych::Exception => e
-          # puts @pastel.red("TemplateEngine Error: Failed to parse YAML file #{template_path} - #{e.message}")
           return nil 
         end
 
         unless yaml_data.is_a?(Hash) && yaml_data['info'].is_a?(Hash) && yaml_data['requests'].is_a?(Array)
-          # puts @pastel.red("TemplateEngine Error: Invalid YAML structure in #{template_path}. Missing 'info' or 'requests'.")
           return nil
         end
         
@@ -46,17 +42,18 @@ module HK
         
         info = yaml_data['info']
         unless info['name'] && info['severity']
-            # puts @pastel.red("TemplateEngine Error: Missing 'name' or 'severity' in 'info' block for template ID '#{template_id}'.")
             return nil
         end
         { type: :yaml, path: template_path, id: template_id, data: yaml_data }
       when '.rb'
         template_id = File.basename(template_path, ".*")
         begin
-          # HK::TemplateRegistry.clear! # Potentially dangerous here if loading multiple .rb files from a dir
+          # Clear previous definition for this ID before loading, to allow hot-reloading/changes.
+          # This makes sense if TemplateRegistry is a global cache across multiple loads in one engine instance.
+          HK::TemplateRegistry.instance_variable_get(:@templates).delete(template_id)
           Kernel.load template_path 
         rescue Exception => e 
-          # puts @pastel.red("TemplateEngine Error: Failed to load Ruby template file #{template_path} - #{e.class.name}: #{e.message}")
+          # puts @pastel.red("TemplateEngine Error: Failed to load Ruby template file #{template_path} - #{e.class.name}: #{e.message}") # Keep error logging if desired
           return nil
         end
         
@@ -68,25 +65,20 @@ module HK
           nil
         end
       else
-        # puts @pastel.yellow("TemplateEngine Warning: Unknown template type for extension '#{ext}' - #{template_path}")
         nil
       end
     end
     
-    # Loads templates from a given file path or a directory.
-    # Returns a hash like { loaded_templates: [], errors: [] }
     def load_from_path(path_or_directory)
       loaded_templates = []
       errors = []
 
       unless File.exist?(path_or_directory)
         errors << "Path does not exist: #{path_or_directory}"
-        # puts @pastel.red("TemplateEngine Error: Path does not exist - #{path_or_directory}") # Verbose logging
         return { loaded_templates: loaded_templates, errors: errors }
       end
 
       if File.file?(path_or_directory)
-        # puts @pastel.dim("  TemplateEngine: Loading single template file: #{path_or_directory}")
         template_definition = load(path_or_directory) 
         if template_definition
           loaded_templates << template_definition
@@ -94,35 +86,25 @@ module HK
           errors << "Failed to load or parse template file: #{path_or_directory}"
         end
       elsif File.directory?(path_or_directory)
-        # puts @pastel.dim("  TemplateEngine: Loading templates from directory: #{path_or_directory}")
-        Dir.new(path_or_directory).children.each do |entry| # Using Dir.new().children as specified in prompt
+        Dir.new(path_or_directory).children.each do |entry| 
             file_path = File.join(path_or_directory, entry)
             next unless File.file?(file_path) 
 
             ext = File.extname(file_path).downcase
             if ['.yml', '.yaml', '.rb'].include?(ext)
-              # puts @pastel.dim("    Found template candidate: #{file_path}")
               template_definition = load(file_path)
               if template_definition
                 loaded_templates << template_definition
               else
-                # load method itself might print specific errors, or we can add generic one.
                 errors << "Failed to load or parse template file: #{file_path}"
               end
             end
         end
-        # This warning about no supported files might be too noisy if a directory legitimately has other files.
-        # The prompt includes a check here:
-        # if loaded_templates.empty? && Dir.glob(File.join(path_or_directory, "*.{yml,yaml,rb}")).none?
-        #      puts @pastel.yellow("TemplateEngine Warning: No supported template files (.yml, .yaml, .rb) found in directory: #{path_or_directory}")
-        # end
-        # I will add this check to the errors array if it's relevant
         if loaded_templates.empty? && errors.empty? && Dir.glob(File.join(path_or_directory, "*.{yml,yaml,rb}")).none?
           errors << "No supported template files (.yml, .yaml, .rb) found in directory: #{path_or_directory}"
         end
       else
         errors << "Path is not a file or directory: #{path_or_directory}"
-        # puts @pastel.red("TemplateEngine Error: Path is not a file or directory - #{path_or_directory}")
       end
       
       { loaded_templates: loaded_templates, errors: errors }
@@ -130,7 +112,6 @@ module HK
 
     def execute(parsed_template, target_url)
       unless parsed_template && target_url
-        # puts @pastel.red("TemplateEngine Error: Invalid arguments for execute.")
         return { success: false, findings: [], errors: ["Invalid arguments"] }
       end
 
@@ -138,17 +119,13 @@ module HK
       when :yaml
         execute_yaml_template(parsed_template, target_url)
       when :ruby
-        execute_ruby_template(parsed_template, target_url)
+        execute_ruby_template(parsed_template, target_url) # Updated call
       else
-        # puts @pastel.red("TemplateEngine Error: Cannot execute unknown template type.")
         { success: false, findings: [], errors: ["Unknown template type for execution"] }
       end
     end
 
     def run(template_path, target_url)
-      # This method is for running a single template file.
-      # For running multiple templates from a directory, the caller should use
-      # load_from_path and then iterate through the loaded_templates to execute them.
       parsed_template = load(template_path) 
       if parsed_template
         execute(parsed_template, target_url)
@@ -160,6 +137,7 @@ module HK
     private
 
     def execute_yaml_template(parsed_template, target_url)
+      # ... (implementation from turn 157, remains unchanged)
       template_data = parsed_template[:data]
       template_info = template_data['info']
       findings = []
@@ -238,6 +216,7 @@ module HK
       { success: true, findings: findings, errors: errors }
     end
 
+    # Updated execute_ruby_template method
     def execute_ruby_template(parsed_template, target_url)
       definition = parsed_template[:definition]
       execute_block = definition.execute_block
@@ -246,25 +225,66 @@ module HK
         return { success: false, findings: [], errors: ["Execute block not defined or not a Proc for Ruby template: #{definition.id}"] }
       end
 
+      # Conceptually check target conditions before execution
+      # if definition.target_condition_block && ! _check_target_conditions(target_url, definition.target_condition_block)
+      #   return { success: true, findings: [], errors: ["Target does not meet conditions for template #{definition.id}"] }
+      # end
+
       @web_client ||= HK::Web::Client.new 
-      http_client_wrapper = HK::Http::ClientWrapper.new(@web_client, target_url)
+      # Pass the base target_url to the wrapper. The wrapper's get/post methods will join paths.
+      http_client_wrapper = HK::Http::ClientWrapper.new(@web_client, target_url) 
       
-      findings = []
+      # Create a reporter instance, passing the template's own info attributes
+      # and the main target_url for this execution run.
+      # The RubyTemplateDefinition#info_attrs now includes :id.
+      reporter = HK::RubyTemplateDefinition::FindingReporter.new(definition.info_attrs, target_url)
+      
       errors = []
       success = false
 
       begin
-        result = execute_block.call(target_url, http_client_wrapper, definition.info_attrs)
-        if result.is_a?(Hash)
-          findings.concat(Array(result[:findings])) if result[:findings]
-          errors.concat(Array(result[:errors])) if result[:errors]
+        # The execute block now receives the reporter instance.
+        # It no longer directly receives template_info; it's part of the reporter.
+        # The block is responsible for calling reporter.report(details)
+        # The block can also return a hash with :errors or :findings, but using reporter is preferred.
+        # The prompt implies the block itself might not return anything, relying on reporter.
+        # For now, we'll capture what it *does* return and also what reporter collects.
+        
+        # Make payload sets available to the execute_block if needed.
+        # This could be done by passing them, or by making them accessible via the `http_client_wrapper` or `reporter`,
+        # or by instance_exec'ing the block on an object that has access to them.
+        # For now, the block doesn't explicitly receive payload_sets.
+        # It would access them via `definition.payload_sets` if it had `definition` or if instance_eval'd.
+        # The current call signature is: call(target_url, http_client_wrapper, reporter)
+
+        block_result = execute_block.call(target_url, http_client_wrapper, reporter)
+        
+        # Collect findings from the reporter
+        findings = reporter.findings # Use the reader for findings from reporter
+
+        # Handle errors returned by the block itself, if any (optional pattern)
+        if block_result.is_a?(Hash) && block_result[:errors]
+          errors.concat(Array(block_result[:errors]))
         end
+        # If block_result also has :findings, they are ignored in favor of reporter.findings for consistency.
+
         success = true 
       rescue StandardError => e
-        errors << "Exception during Ruby template '#{definition.id}' execution: #{e.class.name} - #{e.message}\n#{e.backtrace.join("\n  ")}"
+        errors << "Exception during Ruby template '#{definition.id}' execution: #{e.class.name} - #{e.message}\n#{e.backtrace.first(3).join("\n  ")}"
         success = false
+        findings = reporter.findings # Still collect any findings reported before the exception
       end
       { success: success, findings: findings, errors: errors }
     end
+
+    # Placeholder for target condition checking (not fully implemented in this step)
+    # def _check_target_conditions(target_url, condition_block)
+    #   # This would parse target_url into components (scheme, host, port, path, query)
+    #   # and pass them to the condition_block.
+    #   # For now, assume it passes.
+    #   # url_components = { host: URI.parse(target_url).host, ... }
+    #   # return condition_block.call(url_components)
+    #   true 
+    # end
   end
 end
