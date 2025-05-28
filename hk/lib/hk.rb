@@ -43,6 +43,8 @@ module HK
   require_relative 'hk/core_dsl'
   # HK::Http::ClientWrapper for use in Ruby DSL templates
   require_relative 'hk/http/client_wrapper'
+  # HK::SubdomainFinder for discovering subdomains
+  require_relative 'hk/subdomain_finder'
 
   def self.scan(target)
     scanner = HK::Scanner.new(target) # Explicitly HK::Scanner to avoid ambiguity

@@ -23,4 +23,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "bundler" # Using a common version constraint
   spec.add_development_dependency "rspec", "~> 3.0"
   spec.add_development_dependency "webmock", "~> 3.0" # For mocking HTTP requests in tests
+  spec.add_development_dependency "brakeman", "~> 5.0" # For static security analysis
+  spec.add_development_dependency "rake", "~> 13.0" # For running Rake tasks
+  spec.add_development_dependency "benchmark-ips", "~> 2.8" # For performance benchmarking
 end
