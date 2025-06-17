@@ -3,7 +3,7 @@ require 'bundler/gem_tasks' # If not already present, for `bundle exec rake ...`
 # RSpec::Core::RakeTask.new(:spec) # Example: adds a `rake spec` task
 
 # Make sure Bundler.require can find brakeman if needed, though typically Rake task shells out
-# Bundler.require(:default, :development) 
+# Bundler.require(:default, :development)
 
 desc "Run Brakeman static security analysis"
 task :brakeman do
@@ -12,14 +12,14 @@ task :brakeman do
   # Using system with bundle exec is a robust way.
   # Adding --no-pager to prevent it from trying to open results in a pager
   # Added --force because this is not a Rails application
-  result = system("bundle exec brakeman --quiet --no-pager --exit-on-warn --exit-on-error --force .") 
+  result = system("bundle exec brakeman --quiet --no-pager --exit-on-warn --exit-on-error --force .")
   # --quiet: Suppress normal output, only show warnings/errors
   # --no-pager: Prevents Brakeman from piping output to a pager like `less`.
   # --force: Force Brakeman to run on a non-Rails app
   # --exit-on-warn: Exit with non-zero status if warnings are found
   # --exit-on-error: Exit with non-zero status if errors (like unparsable files) occur
   # .: Scan the current directory (which will be hk/ when running rake from there)
-  
+
   if result
     puts "Brakeman scan completed. No critical issues found or scan successful."
   else
@@ -27,7 +27,7 @@ task :brakeman do
     # Rake will typically exit with a non-zero status if system() returns false/nil,
     # or if brakeman itself exits with non-zero due to --exit-on-warn/error.
     # To be explicit, we can cause rake to fail:
-    # fail "Brakeman scan reported issues." 
+    # fail "Brakeman scan reported issues."
   end
 end
 

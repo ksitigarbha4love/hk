@@ -1,5 +1,5 @@
 require 'spec_helper'
-require 'hk/web/client' 
+require 'hk/web/client'
 require 'httparty' # For HTTParty::CookieHash
 
 RSpec.describe HK::Web::Client do
@@ -35,9 +35,9 @@ RSpec.describe HK::Web::Client do
         stub_request(:post, post_url)
           .with(body: post_data, headers: { 'User-Agent'=> HK::Web::Client::DEFAULT_USER_AGENT }.merge(custom_headers) )
           .to_return(status: 201, body: "Success", headers: { 'Location' => '/new_resource' })
-        
+
         result = client.probe(post_url, method: 'POST', body_data: post_data, headers: custom_headers)
-        
+
         expect(result[:status_code]).to eq(201)
         expect(result[:body]).to eq("Success")
         expect(result[:raw_headers]['location']).to eq('/new_resource') # Check specific header
@@ -56,14 +56,14 @@ RSpec.describe HK::Web::Client do
         stub_request(:get, final_destination_url).to_return(status: 200, body: "<title>Final Page</title>")
 
         result = client.probe(redirect_url_1)
-        
+
         expect(result[:status_code]).to eq(200)
         expect(result[:title]).to eq("Final Page")
         expect(result[:final_url]).to eq(final_destination_url)
         expect(result[:url]).to eq(redirect_url_1) # Original URL
       end
     end
-    
+
     # New tests for Cookies
     context "with cookie handling" do
       let(:set_cookie_url) { "#{base_url_str}/setcookie" }
@@ -73,9 +73,9 @@ RSpec.describe HK::Web::Client do
       it "receives and stores cookies from server" do
         stub_request(:get, set_cookie_url)
           .to_return(status: 200, body: "Cookie set page", headers: { 'Set-Cookie' => 'session_id=12345; path=/' })
-        
+
         result = client.probe(set_cookie_url, cookie_jar: cookie_hash) # Pass jar
-        
+
         expect(result[:cookies]).to include("session_id" => "12345")
         # Also check if the passed-in cookie_hash was updated (if HTTParty modifies it directly)
         # HTTParty's behavior with passed :cookies option might update the hash or return new one via response.cookies
@@ -114,8 +114,8 @@ RSpec.describe HK::Web::Client do
       stub_request(:get, "http://nonexistent123.com").to_raise(SocketError.new("Failed to connect"))
 
       # probe_multiple now internally creates and uses a shared cookie_jar for the batch
-      results = client.probe_multiple(urls_to_probe) 
-      
+      results = client.probe_multiple(urls_to_probe)
+
       expect(results).to be_an(Array)
       expect(results.size).to eq(3)
 

@@ -28,24 +28,24 @@ Benchmark.ips do |x|
 
   x.report("tcp_scan (all open)") do
     # Setup mocks inside the report block to ensure they are fresh for each measurement loop
-    allow(Socket).to receive(:tcp).and_return(mock_socket_instance) 
+    allow(Socket).to receive(:tcp).and_return(mock_socket_instance)
     # For banner grabbing part, if any, ensure it doesn't hang or error unexpectedly
     allow(mock_socket_instance).to receive(:write_nonblock).and_return(1) # Simulate successful write
     allow(IO).to receive(:select).with([mock_socket_instance], nil, nil, HK::Net::Scanner::BANNER_READ_TIMEOUT).and_return(nil) # Simulate no banner data
 
-    scanner.tcp_scan(target_host, ports_to_scan, { timeout: 0.01 }) 
+    scanner.tcp_scan(target_host, ports_to_scan, { timeout: 0.01 })
   end
-  
+
   x.report("tcp_scan (all closed)") do
     allow(Socket).to receive(:tcp).and_raise(Errno::ECONNREFUSED)
     scanner.tcp_scan(target_host, ports_to_scan, { timeout: 0.01 })
   end
-  
+
   x.report("tcp_scan (all filtered)") do
     allow(Socket).to receive(:tcp).and_raise(Timeout::Error) # Simulate timeout for connect
     scanner.tcp_scan(target_host, ports_to_scan, { timeout: 0.01 })
   end
-  
+
   x.compare! # This will compare the ips for all 'x.report' blocks
 end
 puts "Benchmark finished."

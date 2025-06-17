@@ -1,5 +1,5 @@
 require 'httparty'
-require 'timeout' 
+require 'timeout'
 
 module HK
   module Web
@@ -18,30 +18,30 @@ module HK
       end
 
       def probe(url, options = {})
-        response_data = { 
-          url: url, 
-          status_code: nil, 
-          title: nil, 
-          error: nil, 
-          raw_headers: nil, 
+        response_data = {
+          url: url,
+          status_code: nil,
+          title: nil,
+          error: nil,
+          raw_headers: nil,
           body: nil,
-          final_url: url, 
+          final_url: url,
           cookies: nil # To store returned cookies or state of jar
         }
-        
+
         begin
           method = options.fetch(:method, 'GET').to_s.upcase
-          body_data = options[:body_data] 
+          body_data = options[:body_data]
           request_timeout = options.fetch(:timeout, 5).to_i
-          
-          httparty_options = { 
-            timeout: request_timeout, 
-            verify: false, 
+
+          httparty_options = {
+            timeout: request_timeout,
+            verify: false,
             headers: { 'User-Agent' => DEFAULT_USER_AGENT },
             # HTTParty handles redirects by default (follow_redirects: true)
             # To get the final URL, we use response.request.last_uri
           }
-          
+
           if options[:headers].is_a?(Hash)
             httparty_options[:headers].merge!(options[:headers])
           end
@@ -49,7 +49,7 @@ module HK
           if body_data && %w[POST PUT PATCH].include?(method)
             httparty_options[:body] = body_data
           end
-          
+
           # Cookie Management
           # If a CookieHash object is passed in options, use it.
           # Otherwise, HTTParty uses its default cookie handling (often per-class instance or per-request).
@@ -71,12 +71,12 @@ module HK
           else
             raise ArgumentError, "Unsupported HTTP method: #{method}"
           end
-          
+
           response_data[:status_code] = response.code
           response_data[:raw_headers] = response.headers.to_h
           response_data[:body] = response.body
-          response_data[:final_url] = response.request.last_uri.to_s 
-          
+          response_data[:final_url] = response.request.last_uri.to_s
+
           # Store cookies from the response (or the state of the provided jar)
           # HTTParty::Response#cookies is a CookieHash of cookies *sent back by the server*
           # If a cookie_jar was passed in options, it would have been updated by HTTParty.
@@ -87,13 +87,13 @@ module HK
             response_data[:title] = title_match[1].strip if title_match && title_match[1]
           end
 
-        rescue ArgumentError => e 
+        rescue ArgumentError => e
             response_data[:error] = e.class.name + ": " + e.message
         rescue HTTParty::Error, SocketError, Timeout::Error, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, OpenSSL::SSL::SSLError, StandardError => e
           response_data[:error] = e.class.name + ": " + e.message
-          response_data[:final_url] = url_to_probe if defined?(url_to_probe) 
+          response_data[:final_url] = url_to_probe if defined?(url_to_probe)
         end
-        
+
         response_data
       end
 

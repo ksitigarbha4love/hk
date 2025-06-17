@@ -22,7 +22,7 @@ RSpec.describe HK::CLI do
       HK::CLI.start(ARGV)
     end
   end
-  
+
   # More robust helper that resets ARGV after command
   def run_cli(*args)
     original_argv = ARGV.dup

@@ -1,0 +1,137 @@
+# hk/lib/hk/net/udp_probes.yml
+# Probes for UDP services. Inspired by nmap-service-probes.
+# Format:
+# - name: Service Name
+#   port: UDP Port Number
+#   probe: Hex-encoded probe string to send
+#   match:
+#     type: "regex" # or "exact"
+#     pattern: Regex pattern (as string) or exact string to match in response
+#     version_capture_group: (Optional) Integer, index of regex capture group for version
+
+# Note: Hex strings must be valid hex and will be decoded to binary.
+# Ensure regex patterns are YAML-safe (e.g., escape special characters if needed).
+
+- name: "dns"
+  port: 53
+  probe: "000101000001000000000000076578616d706c6503636f6d0000010001" # Standard DNS query for example.com A record
+  # No specific match needed for basic "is it DNS?" check, response presence is enough.
+  # A more specific match would look for DNS response codes or parts of the example.com query.
+
+- name: "ntp"
+  port: 123
+  probe: "1700032a00000000" # NTP v2, Mode 7 (private), for requesting MON_GETLIST_1 (monlist)
+  # No specific match needed for basic "is it NTP?" check. Vulnerable servers might return a list.
+
+- name: "snmp"
+  port: 161
+  probe: "302602010104067075626c6963a019020400000000020100020100020100300b300906052b060102010500" # SNMPv2c GET-REQUEST for sysDescr.0 with public community
+  match:
+    type: "regex"
+    pattern: "^\x30" # Expect an ASN.1 sequence (starts with 0x30)
+    # More specific matching would look for SNMP PDU types.
+
+# Placeholder for a service that might not respond or where probe is just to elicit any response
+- name: "echo-udp" # Example, not a standard well-known service with fixed probe like this
+  port: 7
+  probe: "48656c6c6f484b" # "HelloHK" in hex
+  match:
+    type: "exact" # If echo server just sends it back
+    pattern: "HelloHK" # Expect the same string back (after hex decoding)
+
+# Example for a service that might time out or not respond if not present
+- name: "chargen-udp" # Character Generator Protocol
+  port: 19
+  probe: "0d0a" # Just a CRLF, often enough to trigger response or confirm presence
+  # No specific match, presence of any data might indicate chargen. Often filtered.
+
+# Add more probes as needed...
+# - name: "tftp"
+#   port: 69
+#   probe: "0001..." # TFTP read request (RRQ)
+#   match: ...
+#
+# - name: "kerberos"
+#   port: 88
+#   probe: ...
+#   match: ...
+#
+# - name: "netbios-ns" # Name Service
+#   port: 137
+#   probe: ...
+#   match: ...
+#
+# - name: "netbios-dgm" # Datagram Service
+#   port: 138
+#   probe: ... # Usually no specific probe, just listen
+#   match: ...
+#
+# - name: "radius"
+#   port: 1812
+#   probe: ... # RADIUS Access-Request
+#   match: ...
+#
+# - name: "openvpn-udp"
+#   port: 1194
+#   probe: "38" # P_CONTROL_HARD_RESET_CLIENT_V2 (example, may vary)
+#   match:
+#     type: "regex"
+#     pattern: "^\x40" # Expect P_CONTROL_HARD_RESET_SERVER_V2
+#
+# - name: "dtls" # Often on same port as HTTPS for WebRTC/QUIC, or for VPNs
+#   port: 443 # Also used for HTTPS, so probe needs to be DTLS specific if possible
+#   probe: "16fe..." # DTLS ClientHello
+#   match:
+#     type: "regex"
+#     pattern: "^\x16\xfe" # Expect DTLS ServerHello or other DTLS handshake message
+#
+# - name: "stun"
+#   port: 3478
+#   probe: "000100002112a442000000000000000000000000" # STUN Binding Request
+#   match:
+#     type: "regex"
+#     pattern: "^\x01\x01" # STUN Binding Response
+#
+# - name: "isakmp" # IKE / IPsec
+#   port: 500
+#   probe: ... # ISAKMP SA Payload
+#   match: ...
+#
+# - name: "nat-t" # IPsec NAT Traversal
+#   port: 4500
+#   probe: "ffffffff" # Keepalive or initial contact
+#   match: ...
+#
+# - name: "wireguard"
+#   # WireGuard doesn't really have a "probe" in the traditional sense.
+#   # It's often identified by its port and lack of response to other probes,
+#   # or by specific handshake initiation if keys are known (not for general scanning).
+#   port: 51820 # Default WireGuard port
+#   probe: nil # Cannot effectively probe without keys
+#   match: nil # Cannot match without response
+#
+# - name: "quic" # Often on UDP 443
+#   port: 443 # Can also be 80 or other custom ports
+#   probe: nil # QUIC handshake is complex to "probe" simply
+#   match: nil
+#
+# - name: "memcached-udp" # Not typically enabled, but exists
+#   port: 11211
+#   probe: "000000000001000073746174730d0a" # Binary stats command: \x00\x00\x00\x00\x00\x01\x00\x00stats\r\n
+#   match:
+#     type: "regex"
+#     pattern: "STAT " # Expect STAT lines in response
+#
+# - name: "sip"
+#   port: 5060
+#   probe: "OPTIONS sip:nm SIP/2.0\r\nVia: SIP/2.0/UDP nm;branch=foo\r\nFrom: <sip:nm@nm>;tag=root\r\nTo: <sip:nm2@nm2>\r\nCall-ID: 102@nm\r\nCSeq: 1 OPTIONS\r\nContact: <sip:nm@nm>\r\nAccept: application/sdp\r\nContent-Length: 0\r\n\r\n"
+#   match:
+#     type: "regex"
+#     pattern: "SIP/2.0"
+#
+# - name: "rtsp"
+#   port: 554 # Default for TCP, sometimes used for UDP
+#   probe: "OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n"
+#   match:
+#     type: "regex"
+#     pattern: "RTSP/1.0"

@@ -1,7 +1,7 @@
 # lib/hk/core_dsl.rb
 module HK
   module TemplateRegistry
-    @templates = {} 
+    @templates = {}
 
     def self.register(template_definition)
       unless template_definition.is_a?(RubyTemplateDefinition) && template_definition.id
@@ -18,8 +18,8 @@ module HK
     def self.all_templates
         @templates
     end
-    
-    def self.clear! 
+
+    def self.clear!
         @templates = {}
     end
   end
@@ -30,7 +30,7 @@ module HK
     # Inner class for reporting findings from within execute block
     class FindingReporter
       attr_reader :base_template_info, :base_target_url
-      
+
       def initialize(base_template_info, base_target_url)
         @base_template_info = base_template_info
         @base_target_url = base_target_url
@@ -46,16 +46,16 @@ module HK
           severity: @base_template_info[:severity],
           target_url: @base_target_url # The main target URL for this execution run
         }.merge(details_hash) # Merge specific details from the report call
-        
+
         # Ensure required fields for a finding are present if overridden
-        finding[:name] ||= @base_template_info[:name] 
+        finding[:name] ||= @base_template_info[:name]
         finding[:severity] ||= @base_template_info[:severity]
         finding[:matched_at_url] ||= @base_target_url # Default matched_at to base_target_url
 
         @findings << finding
         # Optionally, puts "Finding reported by #{base_template_info[:id]}: #{details_hash[:description]}"
       end
-      
+
       # Allows the execute block to retrieve all findings it has reported
       def all_reported_findings
         @findings
@@ -68,9 +68,9 @@ module HK
       @info_attrs = { name: "Unnamed Ruby Template", severity: "info", id: @id } # Added id to info_attrs
       @payload_sets = {} # Initialize
       @target_condition_block = nil # Initialize
-      
-      @execute_block = proc { |target_url, client, reporter| 
-        default_id = @id 
+
+      @execute_block = proc { |target_url, client, reporter|
+        default_id = @id
         # Default execute block now uses the reporter
         reporter.report(description: "Warning: Execute block not defined for #{default_id}", severity: "debug")
       }
@@ -100,8 +100,8 @@ module HK
 
   def self.template(id, &block)
     definition = RubyTemplateDefinition.new(id)
-    definition.instance_eval(&block) if block_given? 
+    definition.instance_eval(&block) if block_given?
     TemplateRegistry.register(definition)
-    definition 
+    definition
   end
 end

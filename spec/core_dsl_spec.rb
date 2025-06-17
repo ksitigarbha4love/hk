@@ -1,9 +1,9 @@
 require 'spec_helper'
 # core_dsl.rb is loaded via hk.rb, which is loaded by spec_helper
 
-RSpec.describe HK do 
+RSpec.describe HK do
   before(:each) do
-    HK::TemplateRegistry.clear! 
+    HK::TemplateRegistry.clear!
   end
 
   describe ".template DSL (Basic Definition)" do # Renamed for clarity
@@ -54,13 +54,13 @@ RSpec.describe HK do
       expect(definition.execute_block).not_to eq(original_block)
       expect(definition.execute_block).to eq(new_proc)
     end
-    
+
     # New tests for payloads and target DSL methods (from current task)
     describe "DSL methods for payloads and target conditions" do
       it "#payloads stores a named block that generates payloads" do
         payload_block = proc { ["payload1", "payload2"] }
         definition.payloads(:xss_vectors, &payload_block)
-        
+
         expect(definition.payload_sets[:xss_vectors]).to be_a(Proc)
         expect(definition.payload_sets[:xss_vectors].call).to eq(["payload1", "payload2"])
       end
@@ -68,7 +68,7 @@ RSpec.describe HK do
       it "#target stores a condition block" do
         condition_block = proc { |target_components| target_components[:host].end_with?(".gov") }
         definition.target(&condition_block) # Default type is :url
-        
+
         expect(definition.target_condition_block).to be_a(Proc)
         # Test the block itself (conceptual, actual execution is in TemplateEngine)
         expect(definition.target_condition_block.call({host: "example.gov"})).to be true
@@ -76,7 +76,7 @@ RSpec.describe HK do
       end
     end
   end
-  
+
   # New tests for FindingReporter (from current task)
   describe HK::RubyTemplateDefinition::FindingReporter do
     let(:base_info) { { id: "test-id", name: "Test Template", severity: "medium" } }
@@ -96,10 +96,10 @@ RSpec.describe HK do
         evidence: "Error near 'UNION'",
         custom_field: "test_value"
       )
-      
+
       expect(reporter.findings.size).to eq(1)
       finding = reporter.findings.first
-      
+
       expect(finding[:template_id]).to eq("test-id")
       expect(finding[:template_name]).to eq("Test Template")
       expect(finding[:severity]).to eq("medium") # Default from base_info
@@ -114,7 +114,7 @@ RSpec.describe HK do
       reporter.report(description: "Default matched_at_url test")
       expect(reporter.findings.first[:matched_at_url]).to eq(report_target_url)
     end
-    
+
     it "#report allows overriding base_info severity and name" do
         reporter.report(description: "Override severity", severity: "high", name: "Specific Finding Name")
         finding = reporter.findings.first

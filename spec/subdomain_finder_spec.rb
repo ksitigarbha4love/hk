@@ -63,7 +63,7 @@ RSpec.describe HK::SubdomainFinder do
     # finder needs to be re-initialized for each test if its internal state (like @domain) changes
     # or if we want to test initialization with different domains.
     # For these tests, valid_domain ("example.com") is used.
-    let(:finder) { HK::SubdomainFinder.new(valid_domain) } 
+    let(:finder) { HK::SubdomainFinder.new(valid_domain) }
     let(:crtsh_query_url) { "#{crtsh_base_url}?q=%.#{valid_domain}&output=json" }
 
     it "fetches and processes subdomains from crt.sh" do
@@ -74,7 +74,7 @@ RSpec.describe HK::SubdomainFinder do
         { "name_value"=>"example.com" } # Should be filtered (base domain)
       ])
       allow(mock_web_client).to receive(:probe)
-        .with(crtsh_query_url, instance_of(Hash)) 
+        .with(crtsh_query_url, instance_of(Hash))
         .and_return({ body: crtsh_response_body, error: nil, status_code: 200 })
 
       subdomains = finder.discover
@@ -91,14 +91,14 @@ RSpec.describe HK::SubdomainFinder do
     it "returns an empty array and handles JSON parsing errors from crt.sh" do
       allow(mock_web_client).to receive(:probe).with(crtsh_query_url, instance_of(Hash)).and_return({ body: "this is not json", error: nil, status_code: 200 })
       # Expect no error to be raised from discover, and internal error to be handled gracefully.
-      expect(finder.discover).to be_empty 
+      expect(finder.discover).to be_empty
     end
 
     it "returns an empty array if web client probe fails" do
       allow(mock_web_client).to receive(:probe).with(crtsh_query_url, instance_of(Hash)).and_return({ error: "Network timeout", body: nil, status_code: nil })
       expect(finder.discover).to be_empty
     end
-    
+
     it "handles names with mixed case and ensures unique output" do
         crtsh_response_body = JSON.dump([
             { "name_value"=>"One.example.com\nWWW.example.com" }, # Mixed case and newline

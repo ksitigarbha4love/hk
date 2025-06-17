@@ -12,7 +12,7 @@ rescue LoadError
   # If run from /app/, it would be './hk/lib/hk'
   # For `bundle exec ruby benchmarks/template_loading_benchmark.rb` from `/app/hk/`
   # this relative path should be `../lib/hk`
-  require_relative '../lib/hk' 
+  require_relative '../lib/hk'
   # require 'bundler/setup' if defined?(Bundler) # Ensure bundled gems are available if needed by HK
   # Bundler.setup is good if gems are not in default paths and script is run directly.
   # If using `bundle exec`, Bundler handles this.
@@ -20,7 +20,7 @@ end
 
 # Setup: Create dummy template files and a directory
 # Using Process.pid to make it somewhat unique if multiple benchmarks run in parallel, though full path is better
-BENCHMARK_TEMPLATES_DIR = File.expand_path("../tmp/benchmark_templates_#{Process.pid}", __dir__) 
+BENCHMARK_TEMPLATES_DIR = File.expand_path("../tmp/benchmark_templates_#{Process.pid}", __dir__)
 VALID_YAML_CONTENT = { 'id' => 'bench-yaml', 'info' => {'name'=>'Benchmark YAML', 'severity'=>'low'}, 'requests'=>[{'path'=>'/'}] }.to_yaml
 VALID_RUBY_CONTENT = "HK.template('bench-ruby') { info name: 'Benchmark Ruby'; execute {} }"
 
@@ -49,7 +49,7 @@ Benchmark.ips do |x|
   #   engine.load(File.join(BENCHMARK_TEMPLATES_DIR, "bm_ruby1.rb"))
   #   # ... etc.
   # end
-  
+
   # x.compare! will only run if there are multiple reports.
   # For a single report, this line does nothing.
   x.compare! if defined?(:compare!) && x.instance_variable_get(:@reports)&.size.to_i > 1

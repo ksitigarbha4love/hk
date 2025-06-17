@@ -1,11 +1,11 @@
 require 'yaml'
-require 'uri' 
+require 'uri'
 # require 'hk/http/client_wrapper' # Loaded by hk.rb
 # require 'hk/core_dsl' # Loaded by hk.rb
 
 module HK
   class TemplateEngine
-    attr_reader :options 
+    attr_reader :options
 
     def initialize(options = {})
       @options = options
@@ -16,16 +16,16 @@ module HK
         def @pastel.method_missing(*args, &block); args.first; end
         def @pastel.respond_to_missing?(method_name, include_private = false); true; end
       end
-      @web_client ||= HK::Web::Client.new 
-      @loaded_templates = {} 
+      @web_client ||= HK::Web::Client.new
+      @loaded_templates = {}
     end
 
     def load(template_path) # Content from turn 158 (subtask 27)
       unless File.exist?(template_path)
-        return nil 
+        return nil
       end
       ext = File.extname(template_path).downcase
-      
+
       case ext
       when '.yml', '.yaml'
         begin; yaml_data = YAML.safe_load_file(template_path, permitted_classes: [Symbol], aliases: true); rescue Psych::Exception => e; return nil; end
@@ -37,8 +37,8 @@ module HK
         template_id = File.basename(template_path, ".*")
         begin
           HK::TemplateRegistry.instance_variable_get(:@templates).delete(template_id) # Clear previous definition
-          Kernel.load template_path 
-        rescue Exception => e 
+          Kernel.load template_path
+        rescue Exception => e
           # puts @pastel.red("TE Error loading Ruby template #{template_path}: #{e.message}") # For debugging
           return nil
         end
@@ -46,16 +46,16 @@ module HK
         if definition; { type: :ruby, path: template_path, id: template_id, definition: definition }; else; nil; end
       else; nil; end
     end
-    
+
     def load_from_path(path_or_directory) # Content from turn 158 (subtask 27)
       loaded_templates = []; errors = []
       unless File.exist?(path_or_directory); errors << "Path does not exist: #{path_or_directory}"; return { loaded_templates: loaded_templates, errors: errors }; end
       if File.file?(path_or_directory)
-        template_definition = load(path_or_directory) 
+        template_definition = load(path_or_directory)
         if template_definition; loaded_templates << template_definition; else; errors << "Failed to load or parse template file: #{path_or_directory}"; end
       elsif File.directory?(path_or_directory)
-        Dir.new(path_or_directory).children.each do |entry| 
-            file_path = File.join(path_or_directory, entry); next unless File.file?(file_path) 
+        Dir.new(path_or_directory).children.each do |entry|
+            file_path = File.join(path_or_directory, entry); next unless File.file?(file_path)
             ext = File.extname(file_path).downcase
             if ['.yml', '.yaml', '.rb'].include?(ext)
               template_definition = load(file_path)
@@ -79,7 +79,7 @@ module HK
     end
 
     def run(template_path, target_url)
-      parsed_template = load(template_path); 
+      parsed_template = load(template_path);
       if parsed_template; execute(parsed_template, target_url); else; { success: false, findings: [], errors: ["Failed to load template: #{template_path}"] }; end
     end
 
@@ -91,7 +91,7 @@ module HK
         method = req_def.fetch('method', 'GET').upcase; path = req_def['path']
         unless path; errors << { request_index: index, error: "Request definition missing 'path'." }; next; end
         base_uri_for_join = target_url; base_uri_for_join += '/' if !target_url.end_with?('/') && !path.start_with?('/') && path != ""; full_url = URI.join(base_uri_for_join, path.gsub('{{BaseURL}}', target_url)).to_s
-        client_options = { timeout: @options.fetch(:timeout, 5) }; client_options[:headers] = @options[:headers] if @options[:headers] 
+        client_options = { timeout: @options.fetch(:timeout, 5) }; client_options[:headers] = @options[:headers] if @options[:headers]
         probe_result = @web_client.probe(full_url, client_options)
         if probe_result[:error]; errors << { request_index: index, url: full_url, error: "Probe failed: #{probe_result[:error]}" }; next; end
         unless probe_result[:body]; errors << { request_index: index, url: full_url, error: "Response body is empty or missing."}; next; end
@@ -111,7 +111,7 @@ module HK
     def execute_ruby_template(parsed_template, target_url)
       definition = parsed_template[:definition]
       execute_block = definition.execute_block
-      
+
       unless execute_block.is_a?(Proc)
         return { success: false, findings: [], errors: ["Execute block not defined or not a Proc for Ruby template: #{definition.id}"] }
       end
@@ -124,10 +124,10 @@ module HK
         return { success: true, findings: [], errors: ["Target does not meet conditions for template #{definition.id} (Skipped)"] }
       end
 
-      @web_client ||= HK::Web::Client.new 
-      http_client_wrapper = HK::Http::ClientWrapper.new(@web_client, target_url) 
+      @web_client ||= HK::Web::Client.new
+      http_client_wrapper = HK::Http::ClientWrapper.new(@web_client, target_url)
       reporter = HK::RubyTemplateDefinition::FindingReporter.new(definition.info_attrs, target_url)
-      
+
       errors = []
       success = false
       findings = [] # Initialize here
@@ -138,7 +138,7 @@ module HK
         # Thus, it can access its own `payload_sets` via `self.payload_sets` or just `payload_sets`.
         # The TemplateEngine doesn't need to explicitly iterate or pass payloads here.
         # The block receives: target_url (string), http_client_wrapper, reporter.
-        
+
         # The prompt for this subtask says TemplateEngine should implement payload iteration.
         # This means the block needs to be called for each payload if a default set is used,
         # or the block itself needs to be aware of how to get payloads.
@@ -152,17 +152,17 @@ module HK
         # So, the block can do: `payload_sets[:my_set].call.each { |payload| ... }`
 
         block_result = definition.execute_block.call(target_url, http_client_wrapper, reporter)
-        
+
         findings.concat(reporter.findings) # Collect findings from the reporter
 
-        if block_result.is_a?(Hash) 
+        if block_result.is_a?(Hash)
           findings.concat(Array(block_result[:findings])) if block_result[:findings] # Allow block to also return findings
           errors.concat(Array(block_result[:errors])) if block_result[:errors]
         end
         # Remove duplicates if reporter and block_result both added same finding
-        findings.uniq! 
+        findings.uniq!
 
-        success = true 
+        success = true
       rescue StandardError => e
         errors << "Exception during Ruby template '#{definition.id}' execution: #{e.class.name} - #{e.message}\n#{e.backtrace.first(3).join("\n  ")}"
         success = false
@@ -175,7 +175,7 @@ module HK
     # New private method to check target conditions
     def _check_target_conditions(target_url, definition)
       return true unless definition.target_condition_block.is_a?(Proc)
-      
+
       begin
         uri = URI.parse(target_url)
         # Expose specific components to the block for easier use
@@ -193,14 +193,14 @@ module HK
           opaque: uri.opaque      # For opaque URIs
         }
         # Ensure host is not nil for common checks
-        return false if url_components[:host].nil? 
+        return false if url_components[:host].nil?
 
         # Call the template's target condition block
         definition.target_condition_block.call(url_components)
       rescue URI::InvalidURIError, StandardError => e
         # If target_url is unparseable or block errors, treat as condition not met
         # puts @pastel.yellow("Warning: Error checking target condition for template '#{definition.id}' on URL '#{target_url}': #{e.message}")
-        false 
+        false
       end
     end
   end
