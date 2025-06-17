@@ -1,17 +1,14 @@
-require 'hk' # Load your library's main file
-require 'webmock/rspec'
-
-# Configure WebMock
-WebMock.disable_net_connect!(allow_localhost: true) # Disable real net connections
+require "bundler/setup"
+require "hk" # This will load lib/hk.rb
 
 RSpec.configure do |config|
-  # Optional: Any global before-each setup for all specs
-  config.before(:each) do
-    # Stub any external services that are frequently used and not part of the specific test.
-  end
+  # Enable flags like --only-failures and --next-failure
+  config.example_status_persistence_file_path = ".rspec_status"
 
-  # Clean up WebMock stubs after each test to prevent interference
-  config.after(:each) do
-    WebMock.reset!
+  # Disable RSpec exposing methods globally on `Module` and `main`
+  config.disable_monkey_patching!
+
+  config.expect_with :rspec do |c|
+    c.syntax = :expect
   end
 end

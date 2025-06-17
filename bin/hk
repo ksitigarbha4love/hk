@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+require_relative '../lib/hk'
+
+HK.greet # Example usage
+puts "HK CLI is running. Version: #{HK::VERSION}"
+# More CLI logic will be added here.
