@@ -27,4 +27,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 13.0" # For running Rake tasks
   spec.add_development_dependency "benchmark-ips", "~> 2.8" # For performance benchmarking
   spec.add_dependency "robots", "~> 0.3.0" # Using 'robots' gem, common for robots.txt parsing
+  spec.add_dependency "rouge", "~> 3.0" # For syntax highlighting
+  spec.add_dependency "logging", "~> 2.3" # For structured logging
 end

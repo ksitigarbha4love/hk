@@ -1,87 +1,154 @@
+require 'logging' # For structured logging
+
 module HK
-  VERSION = "0.1.0" # Keep in sync with gemspec
+  # --- Gem Version ---
+  VERSION = "0.1.0"
+
+  # --- Error Base Class ---
   class Error < StandardError; end
 
-  class Scanner
-    attr_reader :target
-
-    def initialize(target)
-      @target = target
-      puts "HK::Scanner initialized for target: #{target}"
-    end
-
-    def filter_open_ports
-      puts "Scanner: Filtering open ports for #{@target}"
-      self # Return self for chaining
-    end
-
-    def identify_services
-      puts "Scanner: Identifying services for #{@target}"
-      self
-    end
-
-    def check_vulnerabilities
-      puts "Scanner: Checking vulnerabilities for #{@target}"
-      self
-    end
-
-    def generate_report
-      puts "Scanner: Generating report for #{@target}"
-      self
-    end
+  # --- Logger Configuration ---
+  # Allow other classes to access the logger via HK.logger
+  class << self
+    attr_accessor :logger
   end
 
-  # HK::Net::Scanner is now in its own file
+  def self.configure_logger(level: nil, output: nil, force_default: false)
+    # Determine log level: argument > ENV > default
+    log_level_str = level&.to_s&.downcase || ENV['HK_LOG_LEVEL']&.downcase || 'info'
+
+    # Determine log output: argument > ENV > default
+    log_output_str = output&.to_s || ENV['HK_LOG_OUTPUT'] || 'stderr'
+
+    # Get the root logger for 'HK'
+    # If force_default or no logger yet, create and configure.
+    # Otherwise, if already configured (e.g. by CLI), don't stomp on it unless forced.
+    if force_default || @logger.nil? || @logger.name != 'HK'
+        @logger = Logging.logger['HK'] # Using Logging.logger[self] might be HK::HK
+                                     # Logging.logger['HK'] is cleaner for a specific root name.
+
+        # Clear existing appenders and levels if reconfiguring with force_default
+        if force_default
+            @logger.clear_appenders
+            # Logging gem might not have a simple way to reset level to undefined,
+            # but setting it to the new one is fine.
+        end
+
+        # Only add appenders if none exist or if forced (to avoid duplicate appenders on re-configure)
+        if @logger.appenders.empty? || force_default
+            case log_output_str.downcase
+            when 'stdout'
+              appender = Logging.appenders.stdout
+            when 'stderr'
+              appender = Logging.appenders.stderr
+            else # Assume it's a file path
+              begin
+                appender = Logging.appenders.file(log_output_str)
+              rescue SystemCallError => e
+                # Fallback to stderr if file path is invalid
+                $stderr.puts "Warning: Could not open log file '#{log_output_str}': #{e.message}. Defaulting to STDERR."
+                appender = Logging.appenders.stderr
+              end
+            end
+
+            # Define a layout (pattern)
+            # Example: [FATAL] 2023-10-27 10:00:00.123 HK : My log message
+            layout_pattern = Logging.layouts.pattern(
+              pattern: '[%5l] %d %c : %m\n', # level, date, logger name, message
+              date_pattern: '%Y-%m-%d %H:%M:%S.%3N'
+            )
+            appender.layout = layout_pattern
+            @logger.add_appenders(appender)
+        end
+
+        # Set level (this can be changed later by CLI options too)
+        begin
+          @logger.level = log_level_str.to_sym
+        rescue ArgumentError # Invalid log level string
+          @logger.level = :info # Default to info if invalid level given
+          # $stderr.puts "Warning: Invalid log level '#{log_level_str}'. Defaulting to :info."
+        end
+    end
+    @logger
+  end
+
+  # Initialize logger with default settings (can be overridden by ENV or later by CLI)
+  # This ensures HK.logger is available as soon as hk.rb is required.
+  configure_logger unless @logger # Configure only if not already set (e.g., by a test)
+
+
+  # --- Existing class/module requires (ensure these are after logger setup if they use HK.logger at load time) ---
   require_relative 'hk/net/scanner'
-  # HK::Web::Client for HTTP operations
   require_relative 'hk/web/client'
-  # HK::Web::Crawler for crawling websites
   require_relative 'hk/web/crawler'
-  # HK::TemplateEngine for loading and running templates
   require_relative 'hk/template_engine'
-  # HK::CoreDSL for Ruby native templates (HK.template method)
   require_relative 'hk/core_dsl'
-  # HK::Http::ClientWrapper for use in Ruby DSL templates
-  require_relative 'hk/http/client_wrapper'
-  # HK::SubdomainFinder for discovering subdomains
-  require_relative 'hk/subdomain_finder'
+  require_relative 'hk/http/client_wrapper' # Added from subtask 28
+  require_relative 'hk/subdomain_finder'   # Added from subtask 29
+
+  # --- Existing HK module methods (scan, crawl, etc.) ---
+  # These methods might be refactored later to use HK.logger
+
+  class Scanner # Original HK::Scanner
+    attr_reader :target
+    def initialize(target)
+      @target = target
+      # HK.logger.info "HK::Scanner initialized for target: #{target}" # Example usage
+      puts "HK::Scanner initialized for target: #{target}" # Original puts
+    end
+    def filter_open_ports; puts "Scanner: Filtering open ports for #{@target}"; self; end
+    def identify_services; puts "Scanner: Identifying services for #{@target}"; self; end
+    def check_vulnerabilities; puts "Scanner: Checking vulnerabilities for #{@target}"; self; end
+    def generate_report; puts "Scanner: Generating report for #{@target}"; self; end
+  end
 
   def self.scan(target)
-    scanner = HK::Scanner.new(target) # Explicitly HK::Scanner to avoid ambiguity
+    # HK.logger.debug "HK.scan called with target: #{target}"
+    scanner = HK::Scanner.new(target)
     if block_given?
       yield scanner
     end
-    scanner # Always return the scanner instance
+    scanner
   end
 
   def self.crawl(target)
-    puts "HK.crawl called with target: #{target}"
+    # HK.logger.debug "HK.crawl called with target: #{target}"
+    # This is a placeholder; actual crawl is HK::Web::Crawler
+    # For now, to avoid breaking CLI if `hk crawl` is called without HK::Web::Crawler integration yet:
+    if defined?(HK::Web::Crawler)
+        HK.logger.warn "Direct HK.crawl is deprecated. Use HK::Web::Crawler or CLI."
+        # Placeholder for direct call if needed, or raise error.
+        # For now, just log and use old puts.
+        puts "HK.crawl called with target: #{target} (using old placeholder)"
+    else
+        puts "HK.crawl called with target: #{target}"
+    end
   end
 
   def self.security_scan(&block)
-    puts "HK.security_scan called."
+    # HK.logger.info "HK.security_scan called."
+    puts "HK.security_scan called." # Original puts
     if block_given?
-      # In a real DSL, we would instance_eval or yield an object
-      # that has methods like target, port_scan, etc.
-      # For now, just call the block.
       yield
-      puts "HK.security_scan block executed."
+      # HK.logger.debug "HK.security_scan block executed."
+      puts "HK.security_scan block executed." # Original puts
     else
-      puts "HK.security_scan called without a block."
+      # HK.logger.debug "HK.security_scan called without a block."
+      puts "HK.security_scan called without a block." # Original puts
     end
   end
 
   def self.interactive(&block)
-    puts "HK.interactive mode initiated."
+    # HK.logger.info "HK.interactive mode initiated."
+    puts "HK.interactive mode initiated." # Original puts
     if block_given?
-      # In a real interactive mode, this block might represent
-      # a pre-configured set of commands, or we'd start a REPL.
-      # For now, just call the block.
       yield
-      puts "HK.interactive block (pre-commands) executed."
+      # HK.logger.debug "HK.interactive block (pre-commands) executed."
+      puts "HK.interactive block (pre-commands) executed." # Original puts
     else
-      puts "HK.interactive mode started. (No pre-commands given)"
-      # Later, this is where a REPL would start (e.g., using IRB.start or similar)
+      # HK.logger.debug "HK.interactive mode started. (No pre-commands given)"
+      puts "HK.interactive mode started. (No pre-commands given)" # Original puts
     end
   end
+
 end
